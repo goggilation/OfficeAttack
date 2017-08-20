@@ -8,11 +8,13 @@ public class UpdateTextField : MonoBehaviour
 {
 
     public InputField inputField;
-    public Text textField, gameText, attemptText;
+    public Text textField, gameText, attemptText, playerName, playerCount;
     string randomWord, correctWord;
     string[] fullStringArray = new string[10];
     string[] playedWordsArray = new string[10];
     public Canvas background;
+
+    bool _restarting = true;
 
     float restartGame;
     int attempts, correctAttempts;
@@ -27,8 +29,14 @@ public class UpdateTextField : MonoBehaviour
         inputField.textComponent.color = Color.green;
         textField.color = Color.white;
 
+        foreach (var player in PhotonNetwork.playerList)
+            playerCount.text += player.NickName + "–";
+
+        //playerCount.text = PhotonNetwork.room.PlayerCount.ToString();
+        playerName.text = PlayerPrefs.GetString("PlayerName", "Unnamed");
+
         SetupGame();
-        inputField.onValueChange.AddListener(delegate
+        inputField.onValueChanged.AddListener(delegate
         {
 
         });
@@ -39,14 +47,19 @@ public class UpdateTextField : MonoBehaviour
     {
         if (restartGame > -1f)
         {
-            textField.text = "Restarts in: " + restartGame.ToString();
-            restartGame -= Time.deltaTime;
-            if (restartGame <= 0)
+            if (_restarting)
             {
-                Debug.Log(restartGame);
-                restartGame = -1f;
-                textField.text = "";
-                SetupGame();
+                textField.text = "Restarts in: " + restartGame.ToString();
+                restartGame -= Time.deltaTime;
+                if (restartGame <= 0)
+                {
+                    //Debug.Log(restartGame);
+                    restartGame = -1f;
+                    textField.text = "";
+                    SetupGame();
+                }
+            }else{
+				EndGame();
             }
         }
     }
@@ -105,14 +118,14 @@ public class UpdateTextField : MonoBehaviour
         var randomPos = rnd.Next(5, 8);
         for (var i = 0; i < refactorArray.Length; i++){
             
-            Debug.Log("Refactor: " + refactorArray[randomPos + i] + " Playedword: " + newWordArray[i]);
+            //Debug.Log("Refactor: " + refactorArray[randomPos + i] + " Playedword: " + newWordArray[i]);
             refactorArray[randomStartIndex + i] = newWordArray[i];
 
             if ((i + 1) >= newWordArray.Length)
 				break;
         }
         newString = new string(refactorArray);
-        Debug.Log("NEwstring: " + newString);
+        //Debug.Log("NEwstring: " + newString);
         return newString;
 	}
 
@@ -133,41 +146,73 @@ public class UpdateTextField : MonoBehaviour
         }
     }
 
+    void EndGame()
+    {
+		if (restartGame > -1f)
+		{
+			textField.text = "Ends in: " + restartGame.ToString();
+			restartGame -= Time.deltaTime;
+			if (restartGame <= 0)
+			{
+				//Debug.Log(restartGame);
+				restartGame = -1f;
+				textField.text = "";
+
+				GameManager.Instance.LeaveRoom();
+			}
+		}
+    }
+
     void OnGUI()
     {
         //TODO: VARFÖR KÖRS DENNA TRE GÅNGER??
         GUI.backgroundColor = Color.black;
         if (inputField.isFocused && inputField.text != "" && Input.GetKey(KeyCode.Return))
         {
-			attempts++;
+            attempts++;
+            GameManager._attempts = attempts;
             if (inputField.text == correctWord)
             {
-				correctAttempts++;
-                attemptText.text = correctAttempts.ToString();
+                correctAttempts++;
+                
                 if(correctAttempts >= 3)
                 {
                     gameText.color = Color.green;
                     gameText.text = "CORRECT!";
+                    _restarting = true;
                     restartGame = 10f;
-                    correctAttempts = 0;
+                    attemptText.text += "\nCorrect: " + inputField.text + ". " + correctAttempts.ToString() + " / 3 correct.";
+                    inputField.text = "";
+					correctAttempts = 0;
                 }
                 else
                 {
-                    //attemptText.text += inputField.text + "\n";
-                    //attemptText.text += "Correct attempts " + correctAttempts + " / 3 \n";
+                    attemptText.text += "\nCorrect: " + inputField.text + ". " + correctAttempts.ToString() + " / 3 correct.";
+                    inputField.text = "";
+                    _restarting = true;
                     restartGame = 1f;
                 }
             }
             else
             {
-                if(attempts <= 3)
+                if(attempts < 3)
                 {
 					gameText.color = Color.red;
 					gameText.text = "WRONG! TRY AGAIN";
-					attemptText.text += "Wrong attempt: " + inputField.text + "\n";
-					inputField.text = "";               
+					attemptText.text += "\nWrong attempt: " + inputField.text;
+					inputField.text = "";  
+                    _restarting = true;
+					restartGame = 2f;
                 }
-                restartGame = 2f;
+                else
+                {
+					gameText.color = Color.red;
+					gameText.text = "Sorry! You failed.. Leaving game now!";
+					attemptText.text += "\nWrong attempt: " + inputField.text;
+					inputField.text = "";
+                    _restarting = false;
+                    restartGame = 3f;
+                }
 
             }
         }
